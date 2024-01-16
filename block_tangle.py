@@ -21,7 +21,6 @@ class node_graph():
             nx.draw_networkx(self.g)
     
     def new_node(self):
-        #include adding the neighbourhood
         nodeID = self.count
         self.count += 1
         if not self.nodes:
