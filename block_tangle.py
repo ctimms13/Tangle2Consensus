@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import threading
 import random
 
+
 class node_graph():
 
     def __init__(self):
@@ -73,10 +74,12 @@ class node_graph():
 
 class node():
 
-    def __init__(self, edges, nodeID):
+    def __init__(self, edges, nodeID, blockTangle):
         self.id = nodeID
         self.neighbourhood = edges
         self.signature = np.random.randint(2048)
+        self.ww = 0
+        self.block_tangle = blockTangle
     
     def ww_assign():
         #Create and assign the witness weight of the node
@@ -86,8 +89,13 @@ class node():
         #Ask neighbours for the block
         return 0
     
-    def issue_block():
+    def issue_block(self):
         #Take a bunch of parameters for the block and transactions within
+        inputs = np.randint(0, 2000000000)
+        outputs = np.randint(0, 2000000000)
+        nodeSig = self.signature
+        ww = self.ww
+        self.block_tangle.next_block()
         #Issue the block to the tangle with these parameters and the node's witness weight
         return 0
     
@@ -106,22 +114,22 @@ class node():
 
 class Block():
 
-    def __init__():
+    def __init__(self, time, bt, inputs, outputs, ID, nodeSig):
         #Create the block based on the info given
-        #Inputs
-        #Outputs
-        #References and vote types
-        #Signature of node 
-        return 0
+        self.time = time
+        self.blockTangle = bt
+        self.blockID = ID
+        self.Transaction = transaction(inputs, outputs, self.blockID)
+        self.references = []
+        self.signature = nodeSig 
+        self._approved_by = []
+        self._approved_directly_by = []
     
     def is_visible(self):
-        return self.tangle.time >= self.time + 1.0
+        return self.blockTangle.time >= self.time + 1.0
 
     def is_tip(self):
-        return self.tangle.time < self.approved_time
-
-    def is_tip_delayed(self):
-        return self.tangle.time - 1.0 < self.approved_time
+        return self.blockTangle.time < self.approved_time
     
     def approved_directly_by(self):
         return [p for p in self._approved_directly_by if p.is_visible()]
@@ -131,15 +139,16 @@ class Block():
             if t not in self.tangle.t_cache:
                 self.tangle.t_cache.add(t)
                 self.tangle.t_cache.update(t.approved_by())
-
         return self.tangle.t_cache
 
-    # add a function to make a transaction within the block
-
+class transaction():
+    def __init__(self, inputs, outputs, blockid):
+        self.inputs = inputs
+        self.outputs = outputs
+        self.blockID = blockid
 
 class block_tangle():
-    
-    def __init__(self, rate=50, alpha=0.001, tip_selection='mcmc', plot=False, nodes=[]):
+    def __init__(self, rate=50, alpha=0.001, tip_selection='urts', plot=False, nodes=[]):
         self.time = 1.0
         self.rate = rate
         self.alpha = alpha
@@ -148,17 +157,105 @@ class block_tangle():
         self.count = 1
         self.tip_selection = tip_selection
         self.issuers = nodes
+        self.t_cache = set()
+        self.tip_walk_cache = []
     
-    def next_block():
-        #get the block the node has been issued by the node
-        #put it into the block list
-        return 0
+    def next_block(self, inputs, outputs):
+        dt_time = np.random.exponential(1.0/self.rate)
+        self.time += dt_time
+        self.count += 1
+
+        if self.tip_selection == 'mcmc':
+            approved_tips = set(self.mcmc())
+        elif self.tip_selection == 'urts':
+            approved_tips = set(self.urts())
+        else:
+            raise Exception()
+
+        block = Block(self, self.time, approved_tips, self.count - 1)
+        for t in approved_tips:
+            t.approved_time = np.minimum(self.time, t.approved_time)
+            t._approved_directly_by.add(block)
     
-    def tips():
+
+
+    def tips(self):
         #get all unapproved tips 
-        return 0
+        return [t for t in self.blocks if t.is_visible() and t.is_tip_delayed()]
     
+    def urts(self):
+        tips = self.tips()
+        k = np.randint(2, len(tips)-1)  # added k because the new protocol allows for up to k approvals per block
+        if len(tips) == 0:
+            return np.random.choice([t for t in self.blocks if t.is_visible()]),
+        if len(tips) == 1:
+            return tips[0],
+        return np.random.choice(tips, k)
+"""
+    def mcmc(self):
+        num_particles = 10
+        lower_bound = int(np.maximum(0, self.count - 20.0*self.rate))
+        upper_bound = int(np.maximum(1, self.count - 10.0*self.rate))
+
+        candidates = self.transactions[lower_bound:upper_bound]
+
+        particles = np.random.choice(candidates, num_particles)
+        distances = {}
+        for p in particles:
+            t = threading.Thread(target=self._walk2(p))
+            t.start()
+
+        tips = self.tip_walk_cache[:2]
+        self.tip_walk_cache = list()
+
+        return tips
+
+    def _walk2(self, starting_transaction):
+        p = starting_transaction
+        while not p.is_tip_delayed() and p.is_visible():
+            if len(self.tip_walk_cache) >= 2:
+                return
+
+            next_transactions = p.approved_directly_by()
+            if self.alpha > 0:
+                p_cw = p.cumulative_weight_delayed()
+                c_weights = np.array([])
+                for transaction in next_transactions:
+                    c_weights = np.append(c_weights, transaction.cumulative_weight_delayed())
+
+                deno = np.sum(np.exp(-self.alpha * (p_cw - c_weights)))
+                probs = np.divide(np.exp(-self.alpha * (p_cw - c_weights)), deno)
+            else:
+                probs = None
+
+            p = np.random.choice(next_transactions, p=probs)
+
+        self.tip_walk_cache.append(p)
     
+    def _walk(self, starting_transaction):
+        p = starting_transaction
+        count = 0
+        while not p.is_tip_delayed() and p.is_visible():
+            next_transactions = p.approved_directly_by()
+            if self.alpha > 0:
+                p_cw = p.cumulative_weight_delayed()
+                c_weights = np.array([])
+                for transaction in next_transactions:
+                    c_weights = np.append(c_weights, transaction.cumulative_weight_delayed())
+
+                deno = np.sum(np.exp(-self.alpha * (p_cw - c_weights)))
+                probs = np.divide(np.exp(-self.alpha * (p_cw - c_weights)), deno)
+            else:
+                probs = None
+
+            p = np.random.choice(next_transactions, p=probs)
+            count += 1
+
+        return p, count
+
+  
+"""
+  
 class Genesis(Block):
 
     def __init__(self, tangle):
@@ -173,3 +270,16 @@ class Genesis(Block):
 
     def __repr__(self):
         return '<Genesis>'
+    
+class Universe():
+
+    def __init__(self):
+        self.true_block_tangle = block_tangle()
+        self.true_node_graph = node_graph()
+    
+    def start_universe(self, nodeNum):
+        i = 0
+        while i < nodeNum:
+            self.true_node_graph.new_node()
+            i += 1
+        
