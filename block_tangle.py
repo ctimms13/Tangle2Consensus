@@ -8,12 +8,14 @@ import random
 
 class node_graph():
 
-    def __init__(self):
+    def __init__(self, blocktangle):
         self.time = 1
         self.nodes = []
         self.count = 0
         self.edgelist = []
         self.nodeIDlist = []
+        self.nodeWeights = []
+        self.blocktangle = blocktangle
         self.g = nx.Graph()
 
     def plot_graph(self):
@@ -21,27 +23,53 @@ class node_graph():
             self.g.add_edges_from(self.edgelist)
             nx.draw_networkx(self.g)
     
+    def printStats(self):
+        print("Nodes RAW", self.nodes)
+        print("Edges", self.edgelist)
+        print("Node IDS", self.nodeIDlist)
+        print("Weights", self.nodeWeights)
+    
+    def assignWW(self):
+        ww = 1 / len(self.nodes)
+        self.nodeWeights.clear()
+        return ww
+
     def new_node(self):
         nodeID = self.count
         self.count += 1
         if not self.nodes:
-            n = node([], nodeID)
+            ww = 1
+            n = node([], nodeID,  self.blocktangle, ww)
             self.nodeIDlist.append(nodeID)
+            self.nodeWeights.append([nodeID, n.signature, ww])
+            for m in self.nodes:
+                m.ww = ww
+                self.nodeWeights.append([m.id, m.signature, m.ww])
 
         elif len(self.nodes) == 1:
-            n = node(self.nodes, nodeID)
+            ww = self.assignWW()
+            n = node(self.nodes, nodeID, self.blocktangle, ww)
+            for m in self.nodes:
+                m.ww = ww
+                self.nodeWeights.append([m.id, m.signature, m.ww])
             self.edgelist.append((nodeID, self.nodes[0].id))
             self.nodeIDlist.append(nodeID)
+            self.nodeWeights.append([nodeID, n.signature, ww])
 
         else:
             edges = []
+            ww = self.assignWW()
             j = 0
             while j < 2:
                 item = random.choice(self.nodes)
                 if item not in edges:
                     edges.append(item)
                     j += 1
-            n = node(edges, nodeID)
+            n = node(edges, nodeID, self.blocktangle, ww)
+            for m in self.nodes:
+                m.ww = ww
+                self.nodeWeights.append([m.id, m.signature, m.ww])
+            self.nodeWeights.append([nodeID, n.signature, ww])
             self.edgelist.append((nodeID, edges[0].id))
             self.edgelist.append((nodeID, edges[1].id))
             self.nodeIDlist.append(nodeID)
@@ -71,62 +99,50 @@ class node_graph():
         else:
             print("First node")
     
-
 class node():
 
-    def __init__(self, edges, nodeID, blockTangle):
+    def __init__(self, edges, nodeID, blockTangle, ww):
         self.id = nodeID
         self.neighbourhood = edges
         self.signature = np.random.randint(2048)
-        self.ww = 0
+        self.ww = ww
         self.block_tangle = blockTangle
-    
-    def ww_assign():
-        #Create and assign the witness weight of the node
-        return 0
-    
+       
     def orphaned_block():
         #Ask neighbours for the block
         return 0
     
     def issue_block(self):
         #Take a bunch of parameters for the block and transactions within
-        inputs = np.randint(0, 2000000000)
-        outputs = np.randint(0, 2000000000)
+        inputs = random.randint(0, 2000000000)
+        outputs = random.randint(0, 2000000000)
         nodeSig = self.signature
-        ww = self.ww
-        self.block_tangle.next_block()
-        #Issue the block to the tangle with these parameters and the node's witness weight
-        return 0
+        self.block_tangle.next_block(inputs, outputs, nodeSig)
     
     def get_block_list():
         #Return all the blocks issued by this node
         return 0
     
-    def tip_select():
-        #Select the blocks and or transactions to approve (up to k)
-        #Ask the block tangle for all the unapproved tips
-        return 0
-    
     def update_neighbourhood(self, newNeighbour):
         self.neighbourhood.append(newNeighbour.id)
 
-
 class Block():
 
-    def __init__(self, time, bt, inputs, outputs, ID, nodeSig):
+    def __init__(self, time, inputs, outputs, approved_tips, ID, nodeSig):
         #Create the block based on the info given
         self.time = time
-        self.blockTangle = bt
+       # self.blockTangle = bt
         self.blockID = ID
         self.Transaction = transaction(inputs, outputs, self.blockID)
         self.references = []
+        self.approved_blocks = approved_tips
+        self.approved_time = float('inf')
         self.signature = nodeSig 
         self._approved_by = []
         self._approved_directly_by = []
     
     def is_visible(self):
-        return self.blockTangle.time >= self.time + 1.0
+        return self.time >= self.time + 1.0
 
     def is_tip(self):
         return self.blockTangle.time < self.approved_time
@@ -148,7 +164,7 @@ class transaction():
         self.blockID = blockid
 
 class block_tangle():
-    def __init__(self, rate=50, alpha=0.001, tip_selection='urts', plot=False, nodes=[]):
+    def __init__(self, rate=50, alpha=0.001, tip_selection='urts', plot=False):
         self.time = 1.0
         self.rate = rate
         self.alpha = alpha
@@ -156,11 +172,11 @@ class block_tangle():
         self.blocks = [self.genesis]
         self.count = 1
         self.tip_selection = tip_selection
-        self.issuers = nodes
+        #self.issuers = nodes
         self.t_cache = set()
         self.tip_walk_cache = []
     
-    def next_block(self, inputs, outputs):
+    def next_block(self, inputs, outputs, sig):
         dt_time = np.random.exponential(1.0/self.rate)
         self.time += dt_time
         self.count += 1
@@ -172,24 +188,26 @@ class block_tangle():
         else:
             raise Exception()
 
-        block = Block(self, self.time, approved_tips, self.count - 1)
+        block = Block(self.time, inputs, outputs, approved_tips, self.count -1, sig)
+        self.blocks.append(block)
         for t in approved_tips:
             t.approved_time = np.minimum(self.time, t.approved_time)
             t._approved_directly_by.add(block)
     
-
-
     def tips(self):
         #get all unapproved tips 
-        return [t for t in self.blocks if t.is_visible() and t.is_tip_delayed()]
+        return [t for t in self.blocks if t.is_visible()]
     
     def urts(self):
         tips = self.tips()
-        k = np.randint(2, len(tips)-1)  # added k because the new protocol allows for up to k approvals per block
         if len(tips) == 0:
-            return np.random.choice([t for t in self.blocks if t.is_visible()]),
+            choice = [t for t in self.blocks if t.is_visible()]
+            if not choice:
+                return [self.genesis]
+            return np.random.choice([t for t in self.blocks if t.is_visible()])
         if len(tips) == 1:
-            return tips[0],
+            return tips[0]
+        k = random.randint(2, len(tips)-1)  # added k because the new protocol allows for up to k approvals per block
         return np.random.choice(tips, k)
 """
     def mcmc(self):
@@ -258,24 +276,19 @@ class block_tangle():
   
 class Genesis(Block):
 
-    def __init__(self, tangle):
-        self.tangle = tangle
+    def __init__(self, blockT):
+        self.tangle = blockT
         self.time = 0
         self.approved_transactions = []
         self.approved_time = float('inf')
         self._approved_directly_by = set()
         self.num = 0
-        if hasattr(self.tangle, 'G'):
-            self.tangle.G.add_node(self.num, pos=(self.time, 0))
-
-    def __repr__(self):
-        return '<Genesis>'
     
 class Universe():
 
     def __init__(self):
         self.true_block_tangle = block_tangle()
-        self.true_node_graph = node_graph()
+        self.true_node_graph = node_graph(self.true_block_tangle)
     
     def start_universe(self, nodeNum):
         i = 0
