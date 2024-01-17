@@ -126,12 +126,12 @@ class node():
     def update_neighbourhood(self, newNeighbour):
         self.neighbourhood.append(newNeighbour.id)
 
-class Block():
+class Block(object):
 
-    def __init__(self, time, inputs, outputs, approved_tips, ID, nodeSig):
+    def __init__(self, time, inputs, outputs, approved_tips, ID, nodeSig, bt):
         #Create the block based on the info given
         self.time = time
-       # self.blockTangle = bt
+        self.blockTangle = bt
         self.blockID = ID
         self.Transaction = transaction(inputs, outputs, self.blockID)
         self.references = []
@@ -142,7 +142,8 @@ class Block():
         self._approved_directly_by = []
     
     def is_visible(self):
-        return self.time >= self.time + 1.0
+        #print(self.time, self.blockTangle.time)
+        return self.blockTangle.time >= self.time + 1.0
 
     def is_tip(self):
         return self.blockTangle.time < self.approved_time
@@ -163,7 +164,7 @@ class transaction():
         self.outputs = outputs
         self.blockID = blockid
 
-class block_tangle():
+class block_tangle(object):
     def __init__(self, rate=50, alpha=0.001, tip_selection='urts', plot=False):
         self.time = 1.0
         self.rate = rate
@@ -175,40 +176,54 @@ class block_tangle():
         #self.issuers = nodes
         self.t_cache = set()
         self.tip_walk_cache = []
+        self.g = nx.DiGraph()
     
+    def plotBlock(self):
+        #self.g.add_nodes_from(self.b)
+        #self.g.add_edges_from(self.edgelist)
+        nx.draw_networkx(self.g)
+
+
     def next_block(self, inputs, outputs, sig):
         dt_time = np.random.exponential(1.0/self.rate)
         self.time += dt_time
         self.count += 1
 
         if self.tip_selection == 'mcmc':
-            approved_tips = set(self.mcmc())
+            #approved_tips = set(self.mcmc())
+            approved_tips = [self.mcmc()]
         elif self.tip_selection == 'urts':
-            approved_tips = set(self.urts())
+            #approved_tips = set(self.urts())
+            approved_tips = [self.urts()]
         else:
             raise Exception()
 
-        block = Block(self.time, inputs, outputs, approved_tips, self.count -1, sig)
+        block = Block(self.time, inputs, outputs, approved_tips, self.count -1, sig, self)
         self.blocks.append(block)
         for t in approved_tips:
             t.approved_time = np.minimum(self.time, t.approved_time)
             t._approved_directly_by.add(block)
+            self.g.add_edges_from([(block.blockID, t.blockID)])
     
     def tips(self):
         #get all unapproved tips 
+        print(self.blocks)
         return [t for t in self.blocks if t.is_visible()]
     
     def urts(self):
         tips = self.tips()
+        print("Into URTS", tips)
         if len(tips) == 0:
             choice = [t for t in self.blocks if t.is_visible()]
-            if not choice:
+            if len(choice) == 0:
+                print("Fuck")
                 return [self.genesis]
-            return np.random.choice([t for t in self.blocks if t.is_visible()])
-        if len(tips) == 1:
+            #return np.random.choice([t for t in self.blocks if t.is_visible()])
+        elif len(tips) == 1:
             return tips[0]
-        k = random.randint(2, len(tips)-1)  # added k because the new protocol allows for up to k approvals per block
-        return np.random.choice(tips, k)
+        else:
+            k = random.randint(2, len(tips)-1)  # added k because the new protocol allows for up to k approvals per block
+            return np.random.choice(tips, k)
 """
     def mcmc(self):
         num_particles = 10
@@ -277,12 +292,14 @@ class block_tangle():
 class Genesis(Block):
 
     def __init__(self, blockT):
-        self.tangle = blockT
+        self.blockTangle = blockT
         self.time = 0
         self.approved_transactions = []
         self.approved_time = float('inf')
         self._approved_directly_by = set()
-        self.num = 0
+        self.blockID = 0
+    def __repr__(self):
+        return '<Genesis>'
     
 class Universe():
 
