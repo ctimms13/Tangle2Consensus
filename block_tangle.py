@@ -142,8 +142,8 @@ class Block(object):
         self._approved_directly_by = []
     
     def is_visible(self):
-        #print(self.time, self.blockTangle.time)
-        return self.blockTangle.time >= self.time + 1.0
+        print(self.blockID, self.time, self.blockTangle.time)
+        return self.blockTangle.time >= self.time #+ 1.0
 
     def is_tip(self):
         return self.blockTangle.time < self.approved_time
@@ -194,7 +194,9 @@ class block_tangle(object):
             approved_tips = [self.mcmc()]
         elif self.tip_selection == 'urts':
             #approved_tips = set(self.urts())
-            approved_tips = [self.urts()]
+            #approved_tips = [self.urts()]
+            approved_tips = self.urts()
+            print(approved_tips)
         else:
             raise Exception()
 
@@ -202,12 +204,12 @@ class block_tangle(object):
         self.blocks.append(block)
         for t in approved_tips:
             t.approved_time = np.minimum(self.time, t.approved_time)
-            t._approved_directly_by.add(block)
+            t._approved_directly_by.append(block)
             self.g.add_edges_from([(block.blockID, t.blockID)])
     
     def tips(self):
         #get all unapproved tips 
-        print(self.blocks)
+        #print(self.blocks)
         return [t for t in self.blocks if t.is_visible()]
     
     def urts(self):
@@ -220,7 +222,10 @@ class block_tangle(object):
                 return [self.genesis]
             #return np.random.choice([t for t in self.blocks if t.is_visible()])
         elif len(tips) == 1:
-            return tips[0]
+            #return tips[0]
+            return tips
+        elif len(tips) == 2:
+            return tips
         else:
             k = random.randint(2, len(tips)-1)  # added k because the new protocol allows for up to k approvals per block
             return np.random.choice(tips, k)
@@ -296,7 +301,7 @@ class Genesis(Block):
         self.time = 0
         self.approved_transactions = []
         self.approved_time = float('inf')
-        self._approved_directly_by = set()
+        self._approved_directly_by = []
         self.blockID = 0
     def __repr__(self):
         return '<Genesis>'
