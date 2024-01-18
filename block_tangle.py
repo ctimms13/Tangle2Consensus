@@ -142,7 +142,7 @@ class Block(object):
         self._approved_directly_by = []
     
     def is_visible(self):
-        print(self.blockID, self.time, self.blockTangle.time)
+        #print(self.blockID, self.time, self.blockTangle.time) # print visible blocks
         return self.blockTangle.time >= self.time #+ 1.0
 
     def is_tip(self):
@@ -196,7 +196,7 @@ class block_tangle(object):
             #approved_tips = set(self.urts())
             #approved_tips = [self.urts()]
             approved_tips = self.urts()
-            print(approved_tips)
+            #print(approved_tips)
         else:
             raise Exception()
 
@@ -214,11 +214,11 @@ class block_tangle(object):
     
     def urts(self):
         tips = self.tips()
-        print("Into URTS", tips)
+        #print("Into URTS", tips)
         if len(tips) == 0:
             choice = [t for t in self.blocks if t.is_visible()]
             if len(choice) == 0:
-                print("Fuck")
+                #print("Fuck")
                 return [self.genesis]
             #return np.random.choice([t for t in self.blocks if t.is_visible()])
         elif len(tips) == 1:
